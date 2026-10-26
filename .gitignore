@@ -1,0 +1,16 @@
+# data (not redistributed; download from the paper's project page)
+data/
+*.zarr
+pusht.zip
+*.npz
+
+# model checkpoints (large)
+checkpoints/
+*.pt
+*.pth
+
+# notebooks / python / OS
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.DS_Store

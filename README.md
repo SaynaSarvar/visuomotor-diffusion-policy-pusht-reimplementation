@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🤖 Diffusion Policy for Push-T
+# 🤖 Diffusion Policy for Push-T task
 ### A from-scratch implementation: state-based first, then image-based
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)

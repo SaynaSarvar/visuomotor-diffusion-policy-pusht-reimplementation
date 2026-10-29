@@ -19,9 +19,10 @@ A learning project that reimplements the **Push-T** experiments of
 **state-based** variant first (in progress), then the **image-based** variant, which reuses the same diffusion
 core and changes only the observation encoder.
 
-> 🚧 **Status: work in progress.** The model is implemented and the long training run is under way.
-> Closed-loop evaluation in the Push-T simulator and the ablations are **not done yet**, so this repository
-> reports **no success-rate or coverage numbers**.
+> 🚧 **Status: state-based phase done, ablations and image-based phase to come.** The state-based model is
+> trained for 4500 epochs and evaluated in the official Push-T simulator:
+> **mean score 0.951 on 50 unseen test seeds (average of the last 10 EMA checkpoints; best checkpoint 0.966).**
+> See [Results](#-results) for the protocol and caveats.
 
 ## 📚 Contents
 1. [The task](#-the-task-push-t)
@@ -30,7 +31,7 @@ core and changes only the observation encoder.
 4. [What is implemented](#-what-is-implemented)
 5. [Sanity checks](#-sanity-checks-i-ran)
 6. [Setup and differences from the paper](#%EF%B8%8F-setup-and-differences-from-the-paper)
-7. [Results so far](#-results-so-far)
+7. [Results](#-results)
 8. [Roadmap](#%EF%B8%8F-roadmap)
 9. [Running it](#%EF%B8%8F-running-it)
 10. [Reference](#-reference)
@@ -81,9 +82,9 @@ probability) avoids the intractable normalisation constant that makes energy-bas
 | Data inspection, normalisation to [-1, 1] (paper App. A.1), training windows | ✅ done |
 | Squared-cosine noise schedule, forward noising, one-step recovery check | ✅ done |
 | Sinusoidal step embedding and FiLM-conditioned 1D U-Net (paper Fig. 2b) | ✅ done |
-| Training loop (Eq. 5), EMA, cosine LR with warmup, resumable checkpoints | ✅ done, long run in progress |
+| Training loop (Eq. 5), EMA, cosine LR with warmup, resumable checkpoints (4500 epochs, A100) | ✅ done |
 | DDPM sampler (100 steps, x0 clipping) | ✅ runs end to end |
-| Receding-horizon rollouts in the Push-T environment and target-area-coverage evaluation | ⏳ next |
+| Receding-horizon rollouts in the Push-T simulator and evaluation (50 test + 6 training seeds, last 10 checkpoints) | ✅ done |
 | Ablations (action horizon, EMA) | ⏳ planned |
 | **Phase 2:** image-based Push-T (ResNet-18, spatial softmax, GroupNorm, random-crop augmentation) | 📅 planned |
 
@@ -157,7 +158,7 @@ region of the human actions (red). It will be replaced by a figure from the trai
 | Training speed | about 0.3 s/step on a Tesla T4 (about 33 s per epoch) |
 
 ## ⚙️ Setup and differences from the paper
-- **Windows:** T_o = 2 observation steps in, T_p = 16 action steps out; T_a = 8 will be used when executing plans.
+- **Windows:** T_o = 2 observation steps in, T_p = 16 action steps out; T_a = 8 actions are executed per plan.
 - **Diffusion:** 100 training steps, squared-cosine schedule, noise (epsilon) prediction, MSE loss.
 - **Training:** batch 256, AdamW (lr 1e-4, weight decay 1e-6), cosine schedule with 500 warmup steps,
   4500-epoch schedule, EMA of the weights.
@@ -171,16 +172,41 @@ Where this differs from the paper:
   DDPM sampling).
 - AdamW and the EMA decay ramp (towards 0.9999) are my choices; the paper does not specify them.
 
-## 📈 Results so far
-Training loss (noise-prediction MSE averaged over random noise levels) fell from about 1.0 at the start to
-about 0.005 by epoch 800. A low loss alone does not show that the policy works: rollout evaluation in the
-simulator is the next step, and the numbers will be added here when they exist.
+## 📈 Results
+
+<p align="center">
+  <img src="assets/eval_last10_checkpoints.png" width="720" alt="Mean score of the last 10 EMA checkpoints on test and training seeds, with the paper's Table 1 values as reference lines">
+</p>
+
+| State-based Push-T | Mean score |
+|---|---|
+| **This repo, 50 test seeds, average of last 10 checkpoints** | **0.951** (std 0.005 across checkpoints) |
+| This repo, 50 test seeds, best checkpoint (epoch 4050) | 0.966 |
+| This repo, 6 training seeds, average of last 10 checkpoints | 0.998 |
+| Paper Table 1, Diffusion Policy (CNN), state-based: best / average of last 10 | 0.95 / 0.91 |
+
+**Protocol (follows the official evaluation code):** receding-horizon control with 2 observation steps in and
+8 actions executed per 16-step plan; at most 300 steps per episode, stopping early above 95% coverage.
+The score of an episode is the maximum over the episode of `clip(coverage / 0.95, 0, 1)`. Test seeds are
+100000 to 100049, training seeds 0 to 5. Weights are the EMA weights at epochs 4050, 4100, ..., 4500.
+
+**Read these numbers with care:**
+- The result is **comparable to**, not a confirmed reproduction of, the paper's numbers. The official config
+  trains on at most 90 demonstrations, while this model was trained on all 206; and the official runner's own
+  comments say the paper's numbers were produced with a slightly different seed selection.
+- The 10 checkpoints are only 50 epochs apart at the very end of a cosine schedule (learning rate near zero),
+  so they are almost the same model. Their differences (about 0.003) are mostly sampling noise, and their
+  average is much less independent than the paper's.
+- "Best checkpoint" is chosen on the same test seeds, so the average is the more honest number.
+- Most episodes score 0.96 to 1.0; the average is pulled down by a few outright failures (for example scores
+  of 0.0 or 0.18 on individual seeds). 50 episodes is a small sample.
+- The simulator code is the authors' [official implementation](https://github.com/real-stanford/diffusion_policy);
+  the policy, training and evaluation loop in this repository are my own.
 
 ## 🗺️ Roadmap
 - [x] Data, schedule, network, training loop, sampler
-- [ ] Finish the 4500-epoch run
-- [ ] Evaluate with receding-horizon control in the Push-T environment (target-area coverage; max and
-      average of the last 10 checkpoints, as in the paper)
+- [x] 4500-epoch training run
+- [x] Evaluate with receding-horizon control in the Push-T simulator (best and average of the last 10 checkpoints)
 - [ ] Ablations: action horizon T_a, EMA on/off
 - [ ] Image-based variant (ResNet-18 encoder) and a state-vs-image comparison
 
@@ -190,6 +216,8 @@ simulator is the next step, and the numbers will be added here when they exist.
 2. `pip install -r requirements.txt`
 3. Open `notebooks/pusht_diffusion_policy.ipynb` and run the cells in order. A GPU is strongly recommended.
    The first cell was written for Google Colab; adjust the data and checkpoint paths for your machine.
+   The evaluation cells use the Push-T simulator from the authors'
+   [official repository](https://github.com/real-stanford/diffusion_policy) (cloned inside the notebook).
 
 ## 📖 Reference
 Cheng Chi, Zhenjia Xu, Siyuan Feng, Eric Cousineau, Yilun Du, Benjamin Burchfiel, Russ Tedrake, Shuran Song.

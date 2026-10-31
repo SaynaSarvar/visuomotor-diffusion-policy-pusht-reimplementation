@@ -1,5 +1,14 @@
 torch
+torchvision
 numpy
 matplotlib
 zarr
 jupyter
+# Push-T simulator (official repo is cloned in the notebook: github.com/real-stanford/diffusion_policy)
+pymunk==6.6.0
+shapely
+pygame
+opencv-python-headless
+gym
+imageio
+imageio-ffmpeg
